@@ -8,6 +8,7 @@ KUBERNETES_VERSION="${KUBERNETES_BASE_VERSION%-*}"
 
 echo "Kubernetes version: ${KUBERNETES_VERSION}"
 
+# Create minikube cluster
 export MINIKUBE_IN_STYLE=false && \
 minikube start \
   --kubernetes-version "v${KUBERNETES_VERSION}" \
@@ -16,6 +17,7 @@ minikube start \
 
 kubectl config use-context minikube
 
+# Installing Cluster's CNI
 kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
 
 for deploymentName in $(kubectl -n kube-system get deploy -o name); do
@@ -79,11 +81,50 @@ argocd account update-password \
 
 kubectl create ns dev
 
-argocd repo add git@github.com:xFayre/argocd.git --ssh-private-key-path ~/.ssh/id_rsa
-argocd repo add --insecure-skip-server-verification https://github.com/xFayre/argocd.git
+argocd cluster add minikube
+
+# argocd app create guestbook \
+#     --repo https://github.com/argoproj/argocd-example-apps.git \
+#     --path guestbook \
+#     --dest-server https://kubernetes.default.svc \
+#     --dest-namespace dev
+
+# argocd repo add git@github.com:xFayre/argocd.git --ssh-private-key-path ~/.ssh/id_rsa
+
+# cat <<EOF | kubectl apply -f -
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: nginx
+#   namespace: argocd
+# spec:
+#   project: default
+#   source:
+#     repoURL: https://github.com/xFayre/argocd-applications.git
+#     targetRevision: HEAD
+#     path: nginx
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: dev
+# EOF
+
+# cat <<EOF | kubectl apply -f -
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: argocd-cm
+#   namespace: argocd
+#   labels:
+#     app.kubernetes.io/name: argocd-cm
+#     app.kubernetes.io/part-of: argocd
+# data:
+#   repositories: |
+#     - url: https://github.com/xFayre/argocd-applications
+# EOF
+
 
 argocd app create nginx \
-  --repo https://github.com/xFayre/argocd.git \
+  --repo https://github.com/xFayre/argocd-applications.git \
   --path nginx \
   --dest-server https://kubernetes.default.svc \
   --dest-namespace dev
@@ -111,3 +152,4 @@ done
 curl $(minikube service nginx -n dev --url) -Is | head -2
 
 elapsed ${SECONDS}
+
